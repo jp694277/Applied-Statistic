@@ -1,0 +1,430 @@
+---
+title: "Applied Statistic HW9"
+author: "2020270026 王姿文"
+date: "2020/12/03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readxl)
+library(xlsx)
+library(dplyr)
+library(VIM) #missing value
+library(corrplot) #corr
+library(VIF) #corr
+library(effects) #lm
+library(car)
+pca.pkg <- c("FactoMineR", "factoextra")
+#install.packages(pca.pkg)
+lapply(pca.pkg, library, character.only=TRUE) #pca
+library(fastcluster)
+library(ggplot2)
+library(GGally)
+library(ggpubr)
+library(psych) 
+library(kableExtra)
+library(showtext)
+font_files()
+showtext_auto(enable = TRUE)
+options("scipen"=100, "digits"=4)
+```
+
+```{r data_in, include=FALSE}
+Q1 <- "Q1.xls"
+excel_sheets(Q1)
+myCol <- c(NA,rep("numeric", 14))
+Q1D <- read.xlsx('Q1.xls',1,startRow = 3, header = TRUE,colClasses=myCol) 
+Q1 <- Q1D %>% 
+  slice(-1)%>% 
+  rename(省份 = colnames(Q1D)[1],加工制造业=加.工..制造业,邮电通信业=邮..电....通信业,
+           科学研究业=科..学.研究业,)
+myCol2 <- c(NA,rep("numeric", 8))
+Q2 <- "Q2.xlsx"
+excel_sheets(Q2)
+Q2M <- read.xlsx('Q2.xlsx',1,colClasses=myCol2)
+Q2F <- read.xlsx('Q2.xlsx',2,colClasses=myCol2)
+Q2M <- Q2M[,-1]
+Q2MC <- Q2M[,1]
+Q2F <- Q2F[,-1]
+Q2FC <- Q2F[,1]
+```
+
+## 1.  根据《2000年各地区科技状况统计有关数据一览表》的数据
+### 1.1 进行多元线性回归分析，并尝试用逐步回归法进行变量选择
+
+首先简单地检查是否有遗失值问题。下图中的左图为**Proportion Plot of Missing Data**，横轴为变数名称，纵轴为遗失值比例，可以看出无遗失值。
+
+```{r , echo = F,results='hide',fig.keep='all', fig.align='center',out.extra='angle=90'}
+Q1.mis <- aggr(Q1, col=c('lightblue','red'), numbers=TRUE, prop = TRUE, sortVars=TRUE, labels=names(Q1), cex.axis=.7, gap=3)
+```
+
+接下来检查是否有共线性，虽然单看**Correlation Plot**确实有共线性的可能，但若使用VIF（方差膨胀因子）来衡量多重共线性，可以得知没有若单变量的VIF超过2，因此没有严重的共线性问题。
+
+```{r , echo = F}
+Q1.corr <- cor(Q1[,-1])
+corrplot(Q1.corr, method = "color", diag = F, type = "upper",
+         tl.cex = 0.5 ) #判斷共線性
+Q1L <- Q1[,-1]
+#1.建立完整/空的線性迴歸
+full <- lm(总效率值 ~ ., data = Q1L)
+null <- lm(总效率值 ~ 1, data = Q1L)  
+```
+
+再由下看出Y的分布正常，不需要特别去转换数据。
+```{r , echo = F}
+ggplot(Q1,aes(x=Q1[,2])) + 
+  geom_density(fill="pink",alpha=0.5)+ xlab(colnames(Q1)[2])+ 
+  theme( legend.key.width=unit(10,"inches"))+ 
+  ggtitle(paste('Density Plot of Y = ', colnames(Q1)[2],sep='')) + 
+  annotate("text", x = 1, y = 1.8, label = paste('Mean=',round(mean(Q1[,2]),4),sep=''), size = 3) + 
+  annotate("text", x = 1, y = 1.6, label = paste('Max=',round(max(Q1[,2]),4),sep=''), size = 3) + 
+  annotate("text", x = 1, y = 1.4, label = paste('Min=',round(min(Q1[,2]),4),sep=''), size = 3)
+```
+
+下面分別使用forward、backward、both stepwise regression：
+
+#### Forward
+
+此處以AIC作為衡量線性回歸優劣的指標，若AIC越小則線性回歸的解釋程度越好。一開始創建一個只有截距項的模型，接著一個個選入每一步AIC最低的變量，到了最後一步時，由於再新增`实验发展`也不會使得模型的AIC下降，因此 $$总效率值 =  邮电通信业 + 科学研究业 + 加工制造业$$
+
+```{r , echo = F}
+Q1L <- Q1[,-1]
+#1.建立完整/空的線性迴歸
+full <- lm(总效率值 ~ ., data = Q1L)
+null <- lm(总效率值 ~ 1, data = Q1L)  
+#2.使用step()，逐一把變數丟進去
+forward.lm <- step(null, scope=list(lower=null, upper=full), direction="forward")
+#lm(formula = 总效率值 ~ 邮电通信业 + 科学研究业 + 加工制造业, data = Q1L)
+```
+
+但可以再进一步检测forward stepwise regression的结果，得出Adjusted R-squared=0.479 ，且`邮电通信业`不为显著变量，因此forward stepwise regression还是存有缺陷。
+```{r , echo = F}
+summary(forward.lm) #郵電通信反而沒那麼顯著
+#lm(formula = 总效率值 ~ 邮电通信业 + 科学研究业 + 加工制造业, data = Q1L)
+```
+
+#### Backward
+和forward不同的是，这次需要先把所有变量放入模型再一个个剔除，一样用AIC来衡量，最后一步是可以看出若再剔除`综合技术服务业`，模型也不会更好，所以最终结果为 $$总效率值 = 加工制造业 + 邮电通信业 + 计算机应用服务业 + 综合技术服务业$$
+
+```{r , echo = F}
+backward.lm <- step(full, scope = list(lower=null, upper=full), direction="backward")
+```
+
+进一步检测backward stepwise regression的结果，得出Adjusted R-squared=0.481 ，且`综合技术服务业`不为显着变量，因此backward stepwise regression还是存有缺陷，但Adjusted R-squared比forward stepwise regression高。
+
+```{r , echo = F}
+summary(backward.lm) #综合技术服务业沒那麼顯著
+```
+
+#### Both
+Both stepwise regression則是雙向去挑選，此處分別從Null Regression 和 Full Regression當起點，得出不同結論：
+- From Null Regression
+$$总效率值 ~ 科学研究业 + 加工制造业 + 综合技术服务业$$
+```{r , echo = F}
+both_n.lm <- step(null, scope = list(lower=null, upper=full), direction="both")
+```
+
+进一步检测结果，得出Adjusted R-squared=0.5 ，且`综合技术服务业`不为显着变量
+```{r , echo = F}
+summary(both_n.lm) #综合技术服务业反而沒那麼顯著
+```
+
+- From Full Regression
+$$总效率值 = 加工制造业 + 邮电通信业 + 计算机应用服务业 + 综合技术服务业$$
+```{r , echo = F}
+both_f.lm <- step(full, scope = list(upper=full), direction="both")  
+```
+
+进一步检测结果，得出Adjusted R-squared=0.481 ，且`综合技术服务业`不为显着变量
+```{r , echo = F}
+summary(both_f.lm) #综合技术服务业反而沒那麼顯著
+```
+
+综上所述，both stepwise regression从只有截距项的模型出发所获得的模型，其解释程度最高。
+
+### 1.2  对X1到X13变量做主成分分析
+
+下表可以看出13个变量降为5至6个维度（5至6个主成分）后才可解释90%的变异。
+
+```{r , echo = F}
+Q1P <- Q1L[,-1]
+Q1.pca <- PCA(Q1P, graph = FALSE)
+eig.val <- get_eigenvalue(Q1.pca) 
+eig.val
+```
+
+下图为 PCA 的陡坡图， 横轴为维度(主成分)，纵轴为解释变异百分比。
+
+```{r , echo = F,results='hide',fig.keep='all', fig.align='center',out.extra='angle=90'}
+fviz_eig(Q1.pca, addlabels = TRUE, ylim = c(0, 50)) # scree plot
+```
+
+下为不同主成分中，原始变量的贡献。
+```{r , echo = F}
+var <- get_pca_var(Q1.pca)
+var$coord
+corrplot(var$contrib, is.corr=FALSE) #不同主成分的變數貢獻
+ggarrange(fviz_contrib(Q1.pca, choice = "var", axes = 1),
+          fviz_contrib(Q1.pca, choice = "var", axes = 2),
+          fviz_contrib(Q1.pca, choice = "var", axes = 3),
+          fviz_contrib(Q1.pca, choice = "var", axes = 4),
+          fviz_contrib(Q1.pca, choice = "var", axes = 5),
+          fviz_contrib(Q1.pca, choice = "var", axes = 1:5),
+          ncol=2,nrow=3)
+fviz_pca_var(Q1.pca,col.var = "coord",gradient.cols = c("blue", "yellow", "red"), repel = TRUE)
+
+```
+
+
+## 2. 根据附件中55个国家和地区男子和女子一些跑步项目2005年的纪录数据。 
+### 2.1 分别用样本协方差矩阵和样本相关矩阵对数据进行主成分分析，给出主成分得分并解释，并对比男子和女子的分析结果 
+
+#### 样本协方差矩阵
+
+以下为男子的分析结果，一个主成分就能解释变异程度达98.24%。
+```{r , echo = F}
+Q2M1 <- as.matrix(Q2M)
+Q2F1 <- as.matrix(Q2F)
+Q2M1.cov <- cov(Q2M1,Q2M1)
+Q2M1.cor <- cor(Q2M1,Q2M1)
+Q2F1.cov <- cov(Q2F1,Q2F1)
+Q2F1.cor <- cor(Q2F1,Q2F1)
+
+
+Q2M1.ce <- eigen(Q2M1.cov)$values
+Q2M1_cp <- Q2M1.ce/sum(Q2M1.ce)
+Q2F1.ce <- eigen(Q2F1.cov)$values
+Q2F1_cp <- Q2F1.ce/sum(Q2F1.ce)
+dfM <- data.frame('PC'=c(1:8),'Var%'=Q2M1_cp)
+kbl(dfM) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+以下为女子的分析结果，一个主成分就能解释变异程度达98.41%。
+```{r , echo = F}
+dfF <- data.frame('PC'=c(1:7),'Var%'=Q2F1_cp)
+kbl(dfF) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+##### 样本相关矩阵
+
+以下为男子的分析结果，需要两个主成分解释变异程度才能达至91.39%，与样本协方差矩阵分析中一个主成分便能解释变异至98.24%相差很大，原因在于样本相关矩阵会消除变量测量单位不同的问题。
+```{r , echo = F}
+Q2M1.re <- eigen(Q2M1.cor)$values
+Q2M1_rp <- Q2M1.re/sum(Q2M1.re)
+Q2F1.re <- eigen(Q2F1.cor)$values
+Q2F1_rp <- Q2F1.re/sum(Q2F1.re)
+dfM <- data.frame('PC'=c(1:8),'Var%'=Q2M1_rp)
+kbl(dfM) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+以下为女子的分析结果，需要两个主成分解释变异程度才能达至91.37%，与样本协方差矩阵分析中一个主成分便能解释变异至98.41%相差很大，原因在于样本相关矩阵会消除变量测量单位不同的问题。
+```{r , echo = F}
+dfM <- data.frame('PC'=c(1:7),'Var%'=Q2F1_rp)
+kbl(dfM) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+综上所述，若要解释变异程度大于90%，且主成分数量固定，以此比较男子和女子的分析结果。样本协方差矩阵中，女子的解释变异程度略微高于男子；样本相关矩阵中，则是男子的解释变异程度略微高于女子。
+
+### 2.2 若统一用米/秒单位表示各项纪录的平均速度，用速度协方差矩阵做主成分分析，与前面结果进行对比，你认为哪一个分析得更好， 为什么？ 
+
+以下使用速度协方差矩阵
+下为男子的分析结果，一个主成分解释变异程度达94.67%。
+```{r , echo = F}
+
+Q2M2 <- Q2M %>% mutate(X800米_秒=X800米.分/60,X1500米_秒=X1500米.分/60,X5000米_秒=X5000米.分/60,
+                       X10000米_秒=X10000米.分/60,马拉松_秒=马拉松.分/60,)
+Q2M2 <- Q2M2 %>% select(-X800米.分,-X1500米.分,-X5000米.分,-X10000米.分,-马拉松.分 )
+Q2F2 <- Q2F %>% mutate(X800米_秒=X800米.分/60,X1500米_秒=X1500米.分/60,X3000米_秒=X3000米.分/60,
+                       马拉松_秒=马拉松.分/60,) %>% 
+  select(-X800米.分,-X1500米.分,-X3000米.分,-马拉松.分 )
+
+
+Q2M22 <- as.matrix(Q2M2)
+Q2F22 <- as.matrix(Q2F2)
+Q2M22.cov <- cov(Q2M22,Q2M22)
+Q2F22.cov <- cov(Q2F22,Q2F22)
+
+Q2M2.ce <- eigen(Q2M22.cov)$values
+Q2M2_cp <- Q2M2.ce/sum(Q2M2.ce)
+Q2F2.ce <- eigen(Q2F22.cov)$values
+Q2F2_cp <- Q2F2.ce/sum(Q2F2.ce)
+
+dfM <- data.frame('PC'=c(1:8),'Var%'=Q2M2_cp)
+kbl(dfM) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+
+下为女子的分析结果，一个主成分解释变异程度达97.34%。
+```{r , echo = F}
+dfM <- data.frame('PC'=c(1:7),'Var%'=Q2F2_cp)
+kbl(dfM) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+
+与上题结果相比，男子和女子的一个主成分解释变异程度均下降，然而一样都是女子的一个主成分之解释变异程度高于男主，在此题中，男女之间的解释变异程度差异增大。我认为此题的分析结果更好，因为此题有考虑到去统一不同变量间的单位问题，因此较为合理。
+
+### 2.3 分别用时间和速度速度以及样本协方差矩阵和样本相关矩阵，对男、女径赛纪录做因子分析，计算因子得分，并解释和比较所得结果
+
+首先对男子竞赛的样本协方差矩阵因子分析，并设定以Varimax去旋转矩阵，且以PCA方法计算因子分析（此处就不附加MLE方法的因子分析结果了）。
+下面为Loading Matrix，可以以此建构 $X=AF+ \epsilon$ ，且能看出累积贡献比率（可解释的变异程度）。
+由Loading Matrix可以看出因子1为中长米因子、因子2为短米因子、因子3为中米因子。
+
+```{r , echo = F}
+library(psych) 
+Q1M1c <- principal(Q2M1.cov, nfactors = 3, rotate = 'varimax')
+Q1M1c$loadings
+```
+
+下为计算出的因子得分，利于后续计算。
+```{r , echo = F}
+W <- as.matrix(Q1M1c$weights)
+X <- as.matrix(scale(Q2M1))
+P <- X%*%W
+W
+```
+
+下为将因子得分带入资料中所得出的因子矩阵，可用来做进一步的分析。
+```{r , echo = F}
+pc.rank <- function(F){
+F1 = P[,1]
+F2 = P[,2]
+F3 = P[,3]
+F = (0.451*F1+0.36*F2+0.132*F3)/0.943
+F.rank = rank(-F)
+result = cbind(F1, F2, F3, -F, F.rank)
+return(result)
+}
+pc.rank(F) 
+```
+
+再来将男子的样本相关矩阵和速度矩阵做因子分析，分析结果均和样本协方差矩阵因子分析相同，我认为原因可能是因为因子分析的过程中，都是以相关矩阵求解出初始公因子，且$F、\epsilon$都符合一些特定条件，才会导致这个结果。女子亦是。
+
+以下是女子因子分析結果，一樣以Varimax去旋转矩阵，且以PCA方法计算因子分析（此处就不附加MLE方法的因子分析结果了）。
+下面为Loading Matrix，可以以此建构 $X=AF+ \epsilon$ ，且能看出累积贡献比率（可解释的变异程度）。
+由Loading Matrix可以看出因子1为短米因子、因子2为長米因子、因子3为中米因子。
+```{r , echo = F}
+Q1F1c <- principal(Q2F1.cov, nfactors = 3, rotate = 'varimax')
+Q1F1c$loadings
+```
+
+下为计算出的因子得分，利于后续计算。
+```{r , echo = F}
+W <- as.matrix(Q1F1c$weights)
+X <- as.matrix(scale(Q2F1))
+P <- X%*%W
+W
+```
+
+
+下为将因子得分带入资料中所得出的因子矩阵，可用来做进一步的分析。
+```{r , echo = F}
+pc.rank <- function(F){
+  F1 = P[,1]
+  F2 = P[,2]
+  F3 = P[,3]
+  F = (0.414*F1+0.33*F2+0.211*F3)/0.955
+  F.rank = rank(-F)
+  result = cbind(F1, F2, F3, -F, F.rank)
+  return(result)
+}
+pc.rank(F) 
+```
+
+### 2.4 用聚类分析的方法研究这组数据
+#### Hierarchical clustering
+下为男子的阶层式分群，可见不同方法的分群结果不同，还是得依照资料结构而决定分群方法。
+```{r , echo = F}
+par(mfrow=c(2,2))
+Q2M1.s<- hclust(dist(Q2M1), method="single")
+Q2M1.c<- hclust(dist(Q2M1), method="complete")
+Q2M1.a<- hclust(dist(Q2M1), method="average")
+Q2M1.ce<- hclust(dist(Q2M1), method="centroid")
+
+plot(Q2M1.s, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2M1.c, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2M1.a, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2M1.ce, hang=-1, cex=0.5, labels = Q2FC)
+```
+下为女子的阶层式分群
+```{r , echo = F}
+par(mfrow=c(2,2))
+Q2F1.s<- hclust(dist(Q2F1), method="single")
+Q2F1.c<- hclust(dist(Q2F1), method="complete")
+Q2F1.a<- hclust(dist(Q2F1), method="average")
+Q2F1.ce<- hclust(dist(Q2F1), method="centroid")
+
+plot(Q2F1.s, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2F1.c, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2F1.a, hang=-1, cex=0.5, labels = Q2FC)
+plot(Q2F1.ce, hang=-1, cex=0.5, labels = Q2FC)
+```
+
+#### K-means
+1. 使用PCA降维后再做K-means
+以下分别为男子跟女子的分群结果，均在k=2时，分群界线最明显，较无交叠。
+```{r , echo = F}
+no.group1 <- 2
+no.group2 <- 3
+no.group3 <- 4
+no.iter <- 20
+Q2M1.kmeans1 <- kmeans(Q2M1, no.group1, no.iter) 
+Q2M1.kmeans2 <- kmeans(Q2M1, no.group2, no.iter) 
+Q2M1.kmeans3 <- kmeans(Q2M1, no.group3, no.iter) 
+
+## PCA
+Q2M1.pca <- princomp(Q2M1, cor=TRUE, scores=TRUE) 
+pca.dim1 <- Q2M1.pca$scores[,1]
+pca.dim2 <- Q2M1.pca$scores[,2]
+par(mfrow=c(2,2))
+plot(pca.dim1, pca.dim2, main="PCA for Male Data with K=2", xlab="PCA-1", ylab="PCA-2", col=Q2M1.kmeans1$cluster)
+plot(pca.dim1, pca.dim2, main="PCA for Male Data with K=3", xlab="PCA-1", ylab="PCA-2", col=Q2M1.kmeans2$cluster)
+plot(pca.dim1, pca.dim2, main="PCA for Male Data with K=4", xlab="PCA-1", ylab="PCA-2", col=Q2M1.kmeans3$cluster)
+```
+
+```{r , echo = F}
+no.group1 <- 2
+no.group2 <- 3
+no.group3 <- 4
+no.iter <- 20
+Q2F1.kmeans1 <- kmeans(Q2F1, no.group1, no.iter) 
+Q2F1.kmeans2 <- kmeans(Q2F1, no.group2, no.iter) 
+Q2F1.kmeans3 <- kmeans(Q2F1, no.group3, no.iter) 
+
+## PCA
+Q2F1.pca <- princomp(Q2F1, cor=TRUE, scores=TRUE) 
+pca.dim1 <- Q2F1.pca$scores[,1]
+pca.dim2 <- Q2F1.pca$scores[,2]
+par(mfrow=c(2,2))
+plot(pca.dim1, pca.dim2, main="PCA for Female Data with K=2", xlab="PCA-1", ylab="PCA-2", col=Q2F1.kmeans1$cluster)
+plot(pca.dim1, pca.dim2, main="PCA for Female Data with K=3", xlab="PCA-1", ylab="PCA-2", col=Q2F1.kmeans2$cluster)
+plot(pca.dim1, pca.dim2, main="PCA for Female Data with K=4", xlab="PCA-1", ylab="PCA-2", col=Q2F1.kmeans3$cluster)
+```
+
+2. 使用MDS降维后再做K-means
+以下分别为男子跟女子的分群结果，在k>2的分群效果都比PCA来得好，尤其是女子，直到k=4都分群得很清楚。
+```{r , echo = F}
+par(mfrow=c(2,2))
+Q2M1.mds<- cmdscale(dist(Q2M1))
+mds.dim1 <- Q2M1.mds[,1]
+mds.dim2 <- Q2M1.mds[,2]
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Male Data with K=2", col = Q2M1.kmeans1$cluster)
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Male Data with K=3", col = Q2M1.kmeans2$cluster)
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Male Data with K=4", col = Q2M1.kmeans3$cluster)
+```
+
+```{r , echo = F}
+par(mfrow=c(2,2))
+Q2F1.mds<- cmdscale(dist(Q2F1))
+mds.dim1 <- Q2F1.mds[,1]
+mds.dim2 <- Q2F1.mds[,2]
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Female Data with K=2", col = Q2F1.kmeans1$cluster)
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Female Data with K=3", col = Q2F1.kmeans2$cluster)
+plot(mds.dim1, mds.dim2, xlab="MDS-1", ylab="MDS-2", main="MDS for Female Data with K=4", col = Q2F1.kmeans3$cluster)
+```
+
