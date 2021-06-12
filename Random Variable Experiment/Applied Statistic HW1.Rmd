@@ -1,0 +1,437 @@
+---
+title: "Applied Statistic HW1"
+author: "2020270026 王姿文、2020211316 周斯萤、2020211314 徐颢轩"
+date: "2020/10/02"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(ggplot2)
+library(kableExtra)
+```
+
+### Question 1 模拟将一个公平的硬币独立地抛掷200次的过程，正面记1，反面记0。
+#### 1 给出正面个数的近似分布和经验分布，比较两个分布的差别: 
+
+数据来自连续200个{0,1}随机抽样，重复n次，计算得到n次实验每次的正面(Head)个数。这是一个重复的独立Bernoulli实验，因此该数据服从$Binomial(200,0.5)$的二项分布。
+此外，根据中央极限定理，在大样本下，若随机变数$\{X_i\}| _{i=0}^{m}$i.i.d于同样的分布，且$E(X)=\mu$、$Var(X)=\sigma^2<\infty$，则 $\sum_{i=0}^{m}X_i\sim N(m\mu,\sqrt{mVar(\sigma^2)})$ 。由于 $X_i \sim^{i.i.d} Bernoulli(0.5)$ ，因此 $Binomial(200,0.5)$ 近似分布 $N(100,50)$ 。
+以下分别取n=100,1000,10000，比较真实分布（粉色频率直方图）、$Binomial(200,0.5)$的分布（橘色曲线）、$N(100,50)$的分布（蓝色曲线）。可以明显看出，随着n的数字增大，真实分布（粉色频率直方图）越符合它的近似分佈$N(100,50)$（蓝色曲线）。
+
+```{r echo=F, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+normal <-seq(0,200,1)
+
+f1 <- function(n){
+  z <- 0
+  for (i in 1:n){
+    x <- sample(c(0,1), replace=TRUE, size=200)
+    y <- sum(x)
+    z[i] <- y
+  }
+  df <- as.data.frame(z, stringsAsFactors=FALSE)
+  a <- 0:200
+  b <- dbinom(a, size = 200, prob = 0.5)
+  c <- data.frame(bx=a,by=b)
+  ggplot(df,aes(x=z)) +
+    geom_line(data=c, aes(x=bx, y=by), col = 'orange', size=4,linetype = 4) +  
+    stat_function(fun = dnorm, n = 200, args = list(mean = 100, sqrt(50)), col = 'skyblue', size=4, linetype = 2) +
+    geom_histogram(aes(y = stat(density)),alpha = 0.2, fill = 'pink', col = 'grey') +
+    ggtitle(paste('PDF Plot of Binomial & Normal Distribution of N = ', n,
+                  sep='')) +
+    xlab("Numbers of Head") + ylab("Probability") + 
+    theme(
+      plot.title = element_text(size=16, face="bold"),
+      axis.title.x = element_text(size=14),
+      axis.title.y = element_text(size=14)
+    ) + 
+    xlim(60,140) +
+    ylim(0,0.07) + 
+    annotate("text", x = 120, y = 0.05, 
+             label = paste("Binomial Experiment"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.05, yend = 0.05,
+             colour = "pink", size = 4) +
+    annotate("text", x = 120, y = 0.04, 
+             label = paste("Binomial Distribution"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.04, yend = 0.04,
+             colour = "orange", size = 4) +
+    annotate("text", x = 120, y = 0.03, 
+             label = paste("Normal Distribution"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.03, yend = 0.03,
+             colour = "skyblue", size = 4)
+}
+
+ggarrange(f1(100),f1(1000),f1(10000),ncol=2,nrow=2)
+
+```
+
+以下分别取n=100,1000,10000，比较真实经验分布（橘色曲线）和近似分布$N(100,50)$的经验分布（蓝色曲线）。可以明显看出，随着n的数字增大，真实分布（橘色曲线）越符合它的近似分布$N(100,50)$（蓝色曲线）。
+
+除了统计图的比较，也计算误差R，以数字比较两个分布的拟和度。能够发现随着n增大，误差渐小，可以在图中看出R的值逐渐变小。
+
+```{r echo=F,fig.width = 18, fig.height=10}
+options("scipen"=100, "digits"=4)
+
+R<-function(x,y){
+  z<-0
+  z<-sum((x-y)^2)/length(x)
+  return(z)
+}#构造求R的函数
+
+f1c<-function(n){
+  x<-seq(0,200,1)#取值范围为【0，200】
+  data<-matrix(0,nrow=n,ncol=200)
+  x1<-rep(0,n)
+  for(i in 1:n){
+    data[i,]<-sample(c(0,1),size=200,replace=T)
+    x1[i]<-sum(data[i,])
+  }
+  x1<-sort(x1)
+  y<-rep(0,length(x))
+  for(j in 1:length(x)){
+    for(i in 1:n){
+      if(x[j]<=x1[i]){y[j]<-((i-1)/n)
+      break}
+      if(x[j]>x1[n]){y[j]<-(1)
+      break}
+    }
+  }
+  df <- data.frame(aesx=c(0:200),aesy=y)
+  test <-   R(y,pnorm(x,mean=100,sd=sqrt(50)))#求R
+  ggplot(df,aes(x=aesx,y=aesy)) +
+    geom_line(col = 'orange',size = 4, linetype=4) + 
+    stat_function(fun = pnorm, n = 200, args = list(mean = 100, sqrt(50)), col = 'skyblue', size=4, linetype=2) + 
+    ggtitle(paste('CDF Plot of Binomial & Normal Distribution of N = ', n,
+                  sep='')) +
+    xlab("Numbers of Head") + ylab("Cumulative Probability") + 
+    theme(
+      plot.title = element_text(size=16, face="bold"),
+      axis.title.x = element_text(size=14),
+      axis.title.y = element_text(size=14)
+    ) + 
+    annotate("text", x = 25, y = 0.3, 
+             label = paste('R= ',round(test,6),sep=''), size = 7) +
+    annotate("text", x = 25, y = 0.75, 
+             label = paste("Binomial Experiment"), size = 7) +
+    annotate("segment", x = 60, xend = 70, y = 0.75, yend = 0.75,
+             colour = "orange", size = 4) +
+    annotate("text", x = 25, y = 0.5, 
+             label = paste("Normal Distribution"), size = 7) +
+    annotate("segment", x = 60, xend = 70, y = 0.5, yend = 0.5,
+             colour = "skyblue", size = 4)
+}
+
+ggarrange(f1c(100),f1c(1000),f1c(10000),ncol=2,nrow=2)
+```
+
+---------------
+
+#### 2 给出最长0或1串的长度的经验分布，并尽可能解释所得结果的准确性
+
+我们令 $A_n (x)$ 代表使得最长1串的长度不超过x时总计投掷硬币的次数。显然，所求经验函数 $F_n (x)= 2^{-n} A_n (x)$ 。
+我们首先考虑 $x=3$ 时候的场景。当 $n≤3$ 时，由于此时最长1串的长度一定不大于3，因此 $A_n (3)=2^n$ 。当 $n>3$ 时，任何一个使得 $x=3$ 的投掷硬币出来的结果序列一定以0、10、110或者1110开头，然后连接上一个满足最长1串的长度不大于3的序列，因此我们可以得到递推关系式： $A_n (3)=A_{n-1} (3)+A_{n-2} (3)+A_{n-3} (3)+A_{n-4} (3),n≥3$ 。同理，对于 $x$ 取任意非负整数值时，$f(x)=\begin{cases}\sum_{j=0}^{x}A_{n-1-j}(x)& &,for\quad n>x\\2^n& &,for\quad n≤x\end{cases}$
+
+下面左图是我们实验结果的经验分布（取n=10000），右图则是以 $A_{n}(x)$  画出的经验分布，可以看出实验结果和理论分布走向一致。
+
+```{r echo=F,fig.width = 18, fig.height=10}
+
+sim <- 10000
+data<-matrix(0, nrow=sim, ncol=200)
+for (i in 1:sim){
+  for (j in 1:200){
+    data[i, j] = sample(c(0,1),replace = TRUE, size = 1)
+  }
+}
+f<-function(x){
+  max<-0
+  temp<-0
+  for(i in 1:length(x)){
+    if(x[i]==0){temp=0}
+    if(x[i]==1){temp<-temp+1}
+    if(max<=temp){max=temp}
+  }
+  return(max)
+}
+
+t <- numeric(sim)
+for (i in 1:sim){
+  t[i] <- f(data[i,])
+}
+
+df <- as.data.frame(t)
+
+p1 <- ggplot(df, aes(t, colour = 'Blue')) + 
+  scale_color_manual(values=c('#00BBFF')) +
+  stat_ecdf(geom = "step",size = 4) + 
+  ggtitle('CDF Plot of the Longest Run by Experiment') +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=16, face="bold"),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14)
+  )
+
+data <- matrix(0, nrow = 201, ncol = 200)
+for (x in 1:201){
+  data[x,1] = 0
+  for (n in 1:200){
+    if (n <= (x-1))
+      data[x,n] <- (2^n)
+    else
+      data[x,n]<-sum(data[(x),(n-x):(n-1)])
+  }
+}
+t2 <- data[,200]/(2^200)
+
+df <- data.frame(aesx=c(1:30),aesy=t2[1:30])
+p2 <- ggplot(df,aes(x=aesx,y=aesy)) +
+  geom_line(col = 'orange',size = 4, alpha = 0.8) + 
+  ggtitle('CDF Plot of the Longest by Probability') +
+  xlab("Numbers of the Longest Run") + ylab("Cumulative Probability") + 
+  theme(
+    plot.title = element_text(size=16, face="bold"),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14)
+  )
+
+ggarrange(p1,p2, ncol = 2)
+```
+
+----------------
+
+#### 3 分别给出长度为5、6和不小于7的0或1串的个数的经验分布
+
+根据题1.2，可以得出最长0或1串的长度的经验分布，下图因而得出长度分别为5、6和不小于7的0或1串的经验分布。	
+
+```{r echo=F,fig.width = 18, fig.height=10}
+sim <- 10000
+data<-matrix(0, nrow=sim, ncol=200)
+for (i in 1:sim){
+  for (j in 1:200){
+    data[i, j] = sample(c(0,1),replace = TRUE, size = 1)
+  }
+}
+f<-function(x){
+  max<-0
+  temp<-0
+  for(i in 1:length(x)){
+    if(x[i]==0){temp=0}
+    if(x[i]==1){temp<-temp+1}
+    if(max<=temp){max=temp}
+  }
+  return(max)
+}
+t <- numeric(sim)
+for (i in 1:sim){
+  t[i] <- f(data[i,])
+}
+
+ff<-function(x){
+  leter<-c(0,0,0)
+  temp<-0
+  for(i in 1:length(x)){
+    if(x[i]==0){temp=0}
+    if(x[i]==1){temp<-temp+1}
+    if(temp==5){leter[1]<-leter[1]+1}
+    if(temp==6){leter[2]<-leter[2]+1}
+    if(temp==7){leter[3]<-leter[3]+1}
+  }
+  leter[1]<-leter[1]-leter[2]
+  leter[2]<-leter[2]-leter[3]
+  return(leter)
+}
+
+count5<-c()
+count6<-c()
+count7<-c()
+
+for(i in 1:sim){
+  count5[i]<-ff(data[i,])[1]
+  count6[i]<-ff(data[i,])[2]
+  count7[i]<-ff(data[i,])[3]
+}
+
+count5<-sort(count5)
+count6<-sort(count6)
+count7<-sort(count7)
+
+p1 <- ggplot(as.data.frame(count5), aes(count5, colour = 'Blue')) + 
+  scale_color_manual(values=c('#00BBFF')) +
+  stat_ecdf(geom = "step", size=4) + 
+  ggtitle('CDF Plot of the Length = 5') +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=16, face="bold"),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14)
+  )
+
+p2 <- ggplot(as.data.frame(count6), aes(count6, colour = 'Purple')) + 
+  scale_color_manual(values=c('#B088FF')) +
+  stat_ecdf(geom = "step", size=4) + 
+  ggtitle('CDF Plot of the Length = 6') +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=16, face="bold"),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14)
+  )
+
+p3 <- ggplot(as.data.frame(count7), aes(count7, colour = 'Green')) + 
+  scale_color_manual(values=c('#00AA55')) +
+  stat_ecdf(geom = "step", size=4) + 
+  ggtitle('CDF Plot of the Length ≥ 7') +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=16, face="bold"),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14)
+  )
+
+ggarrange(p1,p2,p3,ncol=2,nrow=2)
+```
+
+-------------
+
+#### 4 连续2个数作为一组，将长度为200的0-1串分割为100个2位二进制数，记这100个数中0-3的个数分别为$n_0,n_1,n_2,n_3$，$X=\sum_{i=0}^{3}\frac{(n-25)^2}{25}$，试比较$X$的经验分布与自由度为3的$\chi^2$分布的近似程度。
+
+根據統計知識，$X=\sum_{i=0}^{3}\frac{(n-25)^2}{25} \sim \chi^2(3)$，因此分別取n=100,1000,10000，來探討$X$的经验分布与自由度为3的$\chi^2$分布的近似程度。
+
+下圖為$X=\sum_{i=0}^{3}\frac{(n-25)^2}{25}$的經驗分布（橘色曲线）與它的近似分佈$\chi^2(3)$（蓝色曲线）。可以明显看出，随着n的数字增大，$X=\sum_{i=0}^{3}\frac{(n-25)^2}{25}$的經驗分布（橘色曲线）越符合它的近似分佈$\chi^2(3)$（蓝色曲线）。
+
+除了统计图的比较，也计算误差R，以数字比较两个分布的拟和度。能够发现随着n增大，误差渐小，可以在图中看出R的值逐渐变小。
+
+```{r echo=F,fig.width = 18, fig.height=10}
+options("scipen"=100, "digits"=4)
+
+R<-function(x,y){
+  z<-0
+  z<-sum((x-y)^2)/length(x)
+  return(z)
+}#构造求R的函数
+
+f4<-function(n){
+  data<-matrix(0,nrow=n,ncol=200)
+  n0<-rep(0,n)
+  n1<-rep(0,n)
+  n2<-rep(0,n)
+  n3<-rep(0,n)
+  X<-rep(0,n)
+  for(i in 1:n){
+    data[i,]<-sample(c(0,1),size=200,replace=T)
+    for(j in 1:100){
+      if(data[i,2*j-1]==0 && data[i,2*j]==0){
+        n0[i]=n0[i]+1
+      }
+      else if(data[i,2*j-1]==0 && data[i,2*j]==1){
+        n1[i]=n1[i]+1
+      }
+      else if(data[i,2*j-1]==1 && data[i,2*j]==0){
+        n2[i]=n2[i]+1
+      }
+      else if(data[i,2*j-1]==1 && data[i,2*j]==1){
+        n3[i]=n3[i]+1
+      }
+      X[i]=sum((n0[i]-25)^2/25,(n1[i]-25)^2/25,(n2[i]-25)^2/25,(n3[i]-25)^2/25)}
+  }
+  X<-sort(X)
+  x<-seq(0,20,0.1)
+  y<-rep(0,length(x))
+  for(j in 1:length(x)){
+    for(i in 1:n){
+      if(x[j]<=X[i]){y[j]<-((i-1)/n)
+      break}
+      if(x[j]>X[n]){y[j]<-(1)
+      break}
+    }
+  }
+  df <- data.frame(col1=c(1:201),col2=y, col3 = pchisq(x,3))
+  test <-   R(y,pchisq(x,3))
+  ggplot(df) +
+    geom_line(aes(col1,col2),col = 'orange',size = 4, linetype=4) + 
+    geom_line(aes(col1,col3),col = 'skyblue',size = 4, linetype=2) + 
+    ggtitle(paste('CDF Plot of Experiment and Qui-square', n,
+                  sep='')) +
+    xlab("Numbers of X") + ylab("Cumulative Probability") + 
+    theme(
+      plot.title = element_text(size=16, face="bold"),
+      axis.title.x = element_text(size=14),
+      axis.title.y = element_text(size=14)
+    )  + 
+    annotate("text", x = 130, y = 0.3, 
+             label = paste('R= ',round(test,6),sep=''), size = 7) +
+    annotate("text", x = 130, y = 0.5, 
+             label = paste("Experiment"), size = 7) +
+    annotate("segment", x = 160, xend = 170, y = 0.5, yend = 0.5,
+             colour = "orange", size = 4) +
+    annotate("text", x = 130, y = 0.4, 
+             label = paste("Qui-square"), size = 7) +
+    annotate("segment", x = 160, xend = 170, y = 0.4, yend = 0.4,
+             colour = "skyblue", size = 4)
+}
+
+
+ggarrange(f4(100),f4(1000),f4(10000), ncol = 2, nrow = 2)
+```
+
+------------
+
+### Question 2 $X_1,X_2,...,X_{100}$为一个标准正态分布总体的样本，$X_{(1)} \geq X_{(2)} \geq ... \geq X_{(100)}$，分别给出$X_{(1)},X_{(2)},X_{(3)},X_{(10)},X_{(20)},X_{(50)},X_{(80)},X_{(98)},X_{(99)},X_{(100)}$等的经验分布，并分别估计它们的期望和方差。
+
+下圖為n=100000的Order Ststistic的經驗分佈圖，可以由圖看出不同$X_{(i)}$的分佈。
+
+```{r echo=F,fig.width = 18, fig.height=10}
+sim <- 100000
+f5 <- function(n,col){
+data <- matrix(0, nrow = sim, ncol = 100)
+for (i in 1:sim){
+  x <-sort(rnorm(100, 0, 1), decreasing = T)
+  for (j in 1:100){
+    data[i, j]<-x[j]
+  }
+}
+df <- as.data.frame(data)
+ggplot(df, aes(data[,n], colour = 'Blue')) + 
+  scale_color_manual(values=col) +
+  stat_ecdf(geom = "step", size=4) + 
+  ggtitle(paste('CDF Plot of ', n,'th X',
+                sep='')) +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=14, face="bold"),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12)
+  )
+}
+
+ggarrange(f5(1,'#00BBFF'),f5(2,'#B088FF'),f5(3,'#EE7700'),f5(10,'#00AAAA'),
+          f5(20,'#FF88C2'),f5(50,'#227700'),f5(80,'#C63300'),f5(98,'#FFB3FF'),
+          f5(99,'#FFCC22'),f5(100,'#880000'),ncol=3,nrow=4)
+```
+
+下表則為期望值和方差結果。
+
+```{r echo=F}
+options("scipen"=100, "digits"=4)
+data <- matrix(0, nrow = sim, ncol = 100)
+for (i in 1:sim){
+  x <-sort(rnorm(100, 0, 1), decreasing = T)
+  for (j in 1:100){
+    data[i, j]<-x[j]
+  }
+}
+table <- data.frame(OrderStatistic=c('X1','X2','X3','X10','X20','X50','X80','X98','X99','X100'),
+                    Expectation=c(mean(data[,1]),mean(data[,2]),mean(data[,3]),mean(data[,10]),
+                                  mean(data[,20]),mean(data[,50]),mean(data[,80]),mean(data[,98]),
+                                  mean(data[,99]),mean(data[,100])),
+                    Variation=c(var(data[,1]),var(data[,2]),var(data[,3]),var(data[,10]),
+                                var(data[,20]),var(data[,50]),var(data[,80]),var(data[,98]),
+                                var(data[,99]),var(data[,100])))
+kbl(table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
