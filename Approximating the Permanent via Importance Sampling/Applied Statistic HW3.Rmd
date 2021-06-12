@@ -1,0 +1,293 @@
+---
+title: "Applied Statistic HW3"
+author: "2020270026 王姿文、2020211316 周斯萤、2020211314 徐颢轩"
+date: "2020/11/06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra)
+options("scipen"=100, "digits"=4)
+library(showtext)
+font_files()
+showtext_auto(enable = TRUE)
+```
+
+### Question 1 矩阵积和式的近似计算。
+#### 1.1 利用GG算法、KKLLL算法计算0-1矩阵积和式；并且可以更一般地，将原始矩阵A的非零元素变换为其他期望为0方差为1的随机变量，计算0-1矩阵积和式。
+将矩阵设为   
+$$A=\left(\begin{array}{cc} 
+1 & 1 & 0\\
+1 & 0 & 1\\
+1 & 1 & 0
+\end{array}\right)$$   
+
+根据作业附档Nperm(A)得出积和式精确值为2。   
+可由下表看出不同算法的近似积和式，每个算法都设定模拟1000次：   
+
+```{r echo=F, fig.height=10, fig.width=18, message=FALSE, warning=FALSE}
+A1<-matrix(0,3,3)
+A1[1,]<-c(1,1,0)
+A1[2,]<-c(1,0,1)
+A1[3,]<-c(1,1,0)
+
+GG<-function(A,n){
+  Xa<-rep(0,n)
+  for(k in 1:n)
+  {B<-matrix(0,dim(A)[1],dim(A)[2])
+  for(i in 1:dim(A)[1]){
+    for(j in 1:dim(A)[2]){
+      if(A[i,j]==1)
+      {
+        B[i,j]<-sample(c(1,-1),1)
+      }
+    }
+  }
+  Xa[k]<-(det(B))^2
+  }
+  return(sum(Xa)/n)
+}
+
+GG1 <- GG(A1,1000)
+
+GGNORM<-function(A,n){
+  Xa<-rep(0,n)
+  for(k in 1:n)
+  {B<-matrix(0,dim(A)[1],dim(A)[2])
+  for(i in 1:dim(A)[1]){
+    for(j in 1:dim(A)[2]){
+      if(A[i,j]==1)
+      {
+        B[i,j]<-rnorm(1,0,1)
+      }
+    }
+  }
+  Xa[k]<-(det(B))^2
+  }
+  return(sum(Xa)/n)
+}
+
+GGN <- GGNORM(A1,10000)
+
+library(QZ, quiet = TRUE)
+
+cdet <- function(M){
+  x <- eigen(M)$values
+  prod(x)
+}
+
+t1=proc.time()
+KKLLL<-function(A,n){
+  Xa<-rep(0,n)
+  for(k in 1:n){
+  B<-matrix(0,dim(A)[1],dim(A)[2])
+  w0<-1
+  w1<-(-1/2+1.732051i/2)
+  w2<-(-1/2-1.732051i/2)
+  for(i in 1:dim(A)[1]){
+    for(j in 1:dim(A)[2]){
+      if(A[i,j]==1)
+      {
+        B[i,j]<-sample(c(w0,w1,w2),1)
+      }
+    }
+  }
+  C<-H(B)
+  Xa[k]<-cdet(B)*cdet(C)
+  }
+  return(sum(Xa)/n)
+}
+
+KK <- KKLLL(A1,1000)
+
+table <- data.frame(算法=c('GG','KKLLL','期望为0方差为1的随机变量'),
+                    Estimation=c(GG1,KK,GGN))
+
+
+kbl(table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+
+```
+
+
+#### 1.2 利用随机路径算法近似计算0-1矩阵积和式。
+将矩阵设为   
+$$A=\left(\begin{array}{cc} 
+1 & 1 & 0\\
+1 & 0 & 1\\
+1 & 1 & 0
+\end{array}\right)$$   
+
+设定模拟1000次，由下得出随机路径算法近似值=2。近似值与精确值一模一样，故随机路径法比题1.1的三种算法还优。   
+即便模拟次数为1，随机路径算法计算而得的近似值也一样为2。   
+
+```{r echo=F, fig.height=10, fig.width=18, message=FALSE, warning=FALSE,eval=F}
+A1<-matrix(0,3,3)
+A1[1,]<-c(1,1,0)
+A1[2,]<-c(1,0,1)
+A1[3,]<-c(1,1,0)
+
+RP<-function(A,N){
+  K<-rep(1,N)
+  for(mn in 1:N){
+    I<-NULL
+    n<-dim(A)[1]
+    kk<-list(NULL)
+    for(j in 1:n){
+      k<-NULL
+      for(i in 1:n){
+        if(A[i,j]==1)
+          k<-union(k,c(i))
+      }
+      kk[[j]]<-k 
+    }
+    c<-rep(0,n)
+    a<-rep(0,n)
+    m<-rep(0,n)
+    for(j in 1:n){
+      s<-setdiff(c(1:n),I)
+      m[j]<-length(kk[[s[1]]])
+      c[j]<-s[1]
+      for(i in s){
+        if(length(setdiff(kk[[i]],a))<m[j]){
+          m[j]<-length(setdiff(kk[[i]],a))
+          c[j]<-i
+        }
+      }
+      I<-union(I,c(c[j]))
+      if(length(setdiff(kk[[c[j]]],a))<2){
+        a[j]<-setdiff(kk[[c[j]]],a) 
+      }
+      else
+      { a[j]<-sample(setdiff(kk[[c[j]]],a),size=1)}
+      
+      K[mn]<-K[mn]*m[j]
+    }
+  }
+  return(sum(K)/N)
+}
+RP(A1,1000)
+```
+
+#### 1.3 考察矩阵稀疏度、规模与计算效率的相关性。
+
+1.	矩阵稀疏度与计算效率的相关性   
+下图横轴为SP(稠密度)，纵轴为$\hat{\frac{E[X_A^2]}{E[X_A]^2}}$（与模拟次数N正相关），而图内的n则为规模。其中模拟次数$N=(\frac{E[X_A^2]}{E[X_A]^2})(\frac{1}{\epsilon ^2}O(ln(\frac{1}{\delta})))$，且模拟次数N越大，代表计算效率越差。且SP(稠密度)的大小与稀疏度大小相反。   
+综上所述，能够得出横轴SP(稠密度)越小，代表越稀疏；纵轴$\hat{\frac{E[X_A^2]}{E[X_A]^2}}$越大，计算效率越差。[1]   
+**KKLLL方法在矩阵稀疏时表现最好，而RP方法在矩阵相对稠密时表现最好。此外，RP对稀疏度最敏感，而KKlll最不敏感。**   
+
+```{r , echo=FALSE}
+knitr::include_graphics("p/1.jpeg")
+```   
+
+图片来源：Random path method with pivoting for computing permanents of matrices 
+
+2.	规模与计算效率的相关性   
+下图横轴为n(规模)，纵轴为$\hat{\frac{E[X_A^2]}{E[X_A]^2}}$（与模拟次数N正相关），而图内的SP则为稠密度。其中模拟次数$N=(\frac{E[X_A^2]}{E[X_A]^2})(\frac{1}{\epsilon ^2}O(ln(\frac{1}{\delta})))$，且模拟次数N越大，代表计算效率越差。    
+明显可以看出n(规模)越大，纵轴$\hat{\frac{E[X_A^2]}{E[X_A]^2}}$越大，计算效率越差。    
+
+```{r , echo=FALSE}
+knitr::include_graphics("p/3.jpeg")
+```   
+
+图片来源：Random path method with pivoting for computing permanents of matrices 
+
+
+
+
+#### 1.4 比较各种算法的计算效率。
+
+首先计算出随机路径算法的计算效率为$O(n^2)$、GG算法的计算效率为$3^{n/2}\frac{1}{\epsilon}log(\frac{1}{\delta}poly(n))$、KKLLL的计算效率为$2^{n/2}\frac{1}{\epsilon}log(\frac{1}{\delta})poly(n)$。   
+此计算效率公式为设定同样的误差条件下（$误差<\epsilon$），达到同样的误差前所花费的计算时间。   
+因为$O(n^2)<2^{n/2}\frac{1}{\epsilon}log(\frac{1}{\delta}poly(n))<3^{n/2}\frac{1}{\epsilon}log(\frac{1}{\delta})poly(n)$，所以**计算效率优劣为随机路径算法优于KKLLL算法优于GG算法**。   
+
+下图来自于文献，也可以证实计算效率优劣为随机路径算法优于KKLLL算法优于GG算法。
+
+```{r , echo=FALSE}
+knitr::include_graphics("p/2.jpeg")
+```
+
+图片来源：Random path method with pivoting for computing permanents of matrices 
+
+------------------
+
+### Question 2 实现第7讲中关于随机排列重要度抽样的实例，并且适当改变算法中参数设置，以及将目标中的290000换为其他值，比较计算效率。
+
+若 $X=(X_1,X_2,…,X_{100})$ 是一个随机排列，也就是说$X$等可能地等于$100!$个排列中的任意一个。估计概率为 $\theta=P{\sum_{j=1}^{100}j*X_j > 目标}$。     $i_1<i_2,j_1<j_2,i_1j_1+i_2j_2-(i_1j_2+i_2j_1)=(i_2-i_1)(j_2-j_1)>0 \Rightarrow i_1j_1+i_2j_2>i_1j_2+i_2j_1$      
+
+     
+则具体的模拟步骤为：    
+先以各自的参数 $\lambda_j=j^{参数}$生成独立的指数分布随机变量$Y_j$，$j=1,2,…,100$；    
+再将$Y_j$排序，令$X_k$等于位次第$k$位的 $Y_j$的下标；     若$\sum_{j=1}^{100}j*X_j>目标$，则令$I=1，否则令其为$$0$。     
+因此由$Y_{X_1}>Y_{X_2}>…>Y_{X_{100}}$得到排列$X=(X_1,X_2,…,X_{100})$的概率为$\frac{(X_{100})^{参数}}{\sum_{j=1}^{100}(X_j)^{参数}}*\frac{(X_{99})^{参数}}{\sum_{j=1}^{99}(X_j)^{参数}}*…*\frac{(X_{2})^{参数}}{\sum_{j=1}^{2}(X_j)^{参数}}*\frac{(X_{1})^{参数}}{\sum_{j=1}^{1}(X_j)^{参数}}$，    
+因此单个抽样的重要度估计为 
+$$\hat{\theta}=\frac{I}{100!}*\frac{\prod_{n=1}^{100}(\sum_{j=1}^{n}(X_j)^{参数})}{(\prod_{n=1}^{100}n)^{参数}}$$     
+     
+       
+下表为模拟次数为10000，目标分别290000;300000，参数=0.7分别为0.3的估计值和效率比较。   
+在参数=0.7时，由于$\sum_{j=1}^{100}j*X_j$的sample mean为286159(目标为290000)或288902(目标为300000)，因此目标数离sample mean越大，其$\hat{\theta}$越小。   
+在参数=0.3时，由于$\sum_{j=1}^{100}j*X_j$的sample mean为278716(目标为290000)或275369(目标为300000)，因此目标数离sample mean越大，其$\hat{\theta}$越小。   
+**而计算效率的部分，可以看出目标数及参数的改变均不太影响计算时间。**   
+
+```{r echo=F, fig.height=10, fig.width=18, message=FALSE, warning=FALSE}
+Q2 <- function(yuzhi,sim,zhishu){
+probs <- c()
+for (i in 1:sim){
+  y_vector <- c()
+  x_vector <- c()
+  sums <- 0 
+  prob <- 1
+  for (i in 1:100){
+    lambda <- i^zhishu
+    y <- rexp(1, 1/lambda)
+    y_vector <- append(y_vector, y)
+  }
+  y_vector_sort <- sort(y_vector)
+  for (i in 1:100){
+    x <- which(y_vector == y_vector_sort[[i]])
+    x_vector <- append(x_vector, x)
+    sums <- sums + i*x
+  }
+  I<- ifelse(sums > yuzhi, 1, 0)
+  for (i in 1:100){
+    sumss <- 0
+    for (j in 1:i){
+      x <- x_vector[i]
+      sumss <- sumss+x^zhishu
+    }
+    prob <- prob*sumss/i^(1+zhishu)
+  }
+  prob<- prob*I
+  probs <- append(probs, prob)
+}
+return(mean(probs))
+}
+
+
+
+table <- data.frame(目标=c('290000','300000','290000','300000'),
+                        参数=c('0.7','0.7','0.3','0.3'),
+                    Estimation=c("0.5283","0.0659","0.0104","0.0001"),
+                    Mean=c("286159","288902", "278716" ,"275369"))
+
+
+kbl(table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+
+在此题中，我们改变指数$\lambda$的取值，分别看$\lambda$取0.3和0.7时的情况。在不同$\lambda$下，我们通过绘制样本均值和模拟次数的关系图，发现$\lambda$取0.7时，模拟次数为40时样本均值就已经趋于稳定，说明此时样本均值已经逐渐收敛于真值；而当$\lambda$取0.3时，模拟次数达到60时，样本均值趋于稳定。从而我们分析得出，$\lambda$等于0.7时收敛速度更快。
+同时，我们固定$\lambda$等于0.7不变，分别看阈值为290000和300000时的情况。我们发现，当阈值取290000时，模拟次数为40时样本均值趋于稳定；而阈值取300000时，模拟次数为20时样本均值就已经趋于稳定。因此我们分析得出，阈值取300000时收敛速度更快。
+
+```{r , echo=FALSE}
+knitr::include_graphics("p/5.jpeg")
+knitr::include_graphics("p/6.jpeg")
+knitr::include_graphics("p/7.jpeg")
+``` 
+
+------------
+
+### 參考文獻
+
+[1] Heng Liang, Linsong Shi, Fengshan Bai, Xiaoyan Liu. Random path method with pivoting for computing permanents of matrices . Applied Mathematics and Computation 185 (2007) 59–71.
