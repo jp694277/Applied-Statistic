@@ -1,0 +1,424 @@
+---
+title: "Applied Statistic HW4"
+author: "2020270026 王姿文、2020211316 周斯萤、2020211314 徐颢轩"
+date: "2020/11/24"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(ggplot2)
+library(kableExtra)
+```
+
+### Question 1 定义关于200位0-1序列的统计量；找到公平抛掷(即b(1,0.5))假设下统计量的分布，统计量的分布可能可以解析地算出，也可用直方图等近似。
+
+数据来自连续200个{0,1}随机抽样，重复n次，计算得到n次实验每次的正面(Head)个数。这是一个重复的独立Bernoulli实验，因此该数据服从$Binomial(200,0.5)$的二项分布。
+此外，根据中央极限定理，在大样本下，若随机变数$\{X_i\}| _{i=0}^{m}$i.i.d于同样的分布，且$E(X)=\mu$、$Var(X)=\sigma^2<\infty$，则 $\sum_{i=0}^{m}X_i\sim N(m\mu,\sqrt{mVar(\sigma^2)})$ 。由于 $X_i \sim^{i.i.d} Bernoulli(0.5)$ ，因此 $Binomial(200,0.5)$ 近似分布 $N(100,50)$ 。
+以下分别取n=100,1000,10000，比较真实分布（粉色频率直方图）、$Binomial(200,0.5)$的分布（橘色曲线）、$N(100,50)$的分布（蓝色曲线）。可以明显看出，随着n的数字增大，真实分布（粉色频率直方图）越符合它的近似分佈$N(100,50)$（蓝色曲线）。
+
+解析来看，是直接代入 $Binomial(200,0.5)$ 的公式，而直方图近似来看则是接近 $N(100,50)$ 分布
+
+```{r echo=F, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+normal <-seq(0,200,1)
+
+f1 <- function(n){
+  z <- 0
+  for (i in 1:n){
+    x <- sample(c(0,1), replace=TRUE, size=200)
+    y <- sum(x)
+    z[i] <- y
+  }
+  df <- as.data.frame(z, stringsAsFactors=FALSE)
+  a <- 0:200
+  b <- dbinom(a, size = 200, prob = 0.5)
+  c <- data.frame(bx=a,by=b)
+  ggplot(df,aes(x=z)) +
+    geom_line(data=c, aes(x=bx, y=by), col = 'orange', size=4,linetype = 4) +  
+    stat_function(fun = dnorm, n = 200, args = list(mean = 100, sqrt(50)), col = 'skyblue', size=4, linetype = 2) +
+    geom_histogram(aes(y = stat(density)),alpha = 0.2, fill = 'pink', col = 'grey') +
+    ggtitle(paste('PDF Plot of Binomial & Normal Distribution of N = ', n,
+                  sep='')) +
+    xlab("Numbers of Head") + ylab("Probability") + 
+    theme(
+      plot.title = element_text(size=16, face="bold"),
+      axis.title.x = element_text(size=14),
+      axis.title.y = element_text(size=14)
+    ) + 
+    xlim(60,140) +
+    ylim(0,0.07) + 
+    annotate("text", x = 120, y = 0.05, 
+             label = paste("Binomial Experiment"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.05, yend = 0.05,
+             colour = "pink", size = 4) +
+    annotate("text", x = 120, y = 0.04, 
+             label = paste("Binomial Distribution"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.04, yend = 0.04,
+             colour = "orange", size = 4) +
+    annotate("text", x = 120, y = 0.03, 
+             label = paste("Normal Distribution"), size = 7) +
+    annotate("segment", x = 135, xend = 140, y = 0.03, yend = 0.03,
+             colour = "skyblue", size = 4)
+}
+
+ggarrange(f1(100),f1(1000),f1(10000),ncol=2,nrow=2)
+
+```
+
+--------------
+
+
+### Question 2 提供几个对这个问题不一定是很好的统计量供大家参考
+
+#### 1 正面的个数
+
+可以使用卡方拟合优度检验来判断，令 $H_o:分布服从B(200,0.5) v.s. H_a:分布不服从B(200,0.5)$，
+统计检定量为 $ Y=\sum_{i=0}^{1} \frac{(n_i-np_i)}{np_i} $ ，且$Y \sim \mathcal{X}^2(1)$。
+A的1个数有93个，0个数有107个；B的1个数有109个，0个数有91个。
+
+$Y_A=\frac{(93-100)^2+(107-100)^2}{200*0.5}=0.98$
+$Y_B=\frac{(91-100)^2+(109-100)^2}{200*0.5}=1.62$
+
+下为 $\mathcal{X}^2(1)$ 的检定值，可以看出在$\alpha=0.05$时，两者均不拒绝$H_0$，均为随机分布，但若$\alpha>0.1$，则但B拒绝$H_0$，B为伪随机分布，A为真实随机分布。
+
+```{r echo=F}
+table <- data.frame(Alpha=c('0.995','0.99','0.975','0.95','0.9','0.1','0.05','0.025','0.01','0.005'),
+                    value=c('-','-','0.001','0.004','0.016','2.706','3.841','5.024','6.635','7.879'))
+
+kbl(t(table)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+#### 2 最长0或1串的长度
+
+令 $A_n (x)$ 代表使得最长1串的长度不超过x时总计投掷硬币的次数。显然，所求经验函数 $F_n (x)= 2^{-n} A_n (x)$ 。
+我们首先考虑 $x=3$ 时候的场景。当 $n≤3$ 时，由于此时最长1串的长度一定不大于3，因此 $A_n (3)=2^n$ 。当 $n>3$ 时，任何一个使得 $x=3$ 的投掷硬币出来的结果序列一定以0、10、110或者1110开头，然后连接上一个满足最长1串的长度不大于3的序列，因此我们可以得到递推关系式： $A_n (3)=A_{n-1} (3)+A_{n-2} (3)+A_{n-3} (3)+A_{n-4} (3),n≥3$ 。同理，对于 $x$ 取任意非负整数值时，$f(x)=\begin{cases}\sum_{j=0}^{x}A_{n-1-j}(x)& &,for\quad n>x\\2^n& &,for\quad n≤x\end{cases}$
+
+下面左图是我们实验结果的经验分布（取n=10000），右图则是以 $A_{n}(x)$  画出的经验分布，可以看出实验结果和理论分布走向一致，而无论是实验结果或理论分布，都能看到在p=0.5时，其对应的最长0或1串的长度约在9左右，而粉色水平线为$\alpha=0.05$的接受域和拒绝域界限（p=0.025 or p=0.975）。
+
+```{r echo=F,fig.width = 18, fig.height=10}
+sim <- 10000
+data2<-matrix(0, nrow=sim, ncol=200)
+for (i in 1:sim){
+  for (j in 1:200){
+    data2[i, j] = sample(c(0,1),replace = TRUE, size = 1)
+  }
+}
+f2<-function(x){
+  max<-0
+  temp<-0
+  for(i in 1:length(x)){
+    if(x[i]==0){temp=0}
+    if(x[i]==1){temp<-temp+1}
+    if(max<=temp){max=temp}
+  }
+  return(max)
+}
+
+t <- numeric(sim)
+for (i in 1:sim){
+  t[i] <- f2(data2[i,])
+}
+
+df2 <- as.data.frame(t)
+
+p2_1 <- ggplot(df2, aes(t, colour = 'Blue')) + 
+  scale_color_manual(values=c('#00BBFF')) +
+  stat_ecdf(geom = "step",size=4) + 
+  ggtitle('CDF Plot of the Longest Run by Experiment') +
+  xlab("Numbers of the Longest Runs") + ylab("Cumulative Probability") +
+  theme(legend.position="none") + 
+  theme(
+    plot.title = element_text(size=14, face="bold"),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12)
+  ) + geom_hline(yintercept=c(0.025,0.975) , color='pink', size=2)
+
+
+###
+options("scipen"=100, "digits"=4)
+
+data2_2 <- matrix(0, nrow = 201, ncol = 200)
+for (x in 1:201){
+  data2_2[x,1] = 0
+  for (n in 1:200){
+    if (n <= (x-1))
+      data2_2[x,n] <- (2^n)
+    else
+      data2_2[x,n]<-sum(data2_2[(x),(n-x):(n-1)])
+  }
+}
+t2 <- data2_2[,200]/(2^200)
+
+df2_2 <- data.frame(aesx=c(1:30),aesy=t2[1:30])
+p2_2 <- ggplot(df2_2,aes(x=aesx,y=aesy)) +
+  geom_line(col = 'orange',size = 1, alpha = 0.8) + 
+  ggtitle('CDF Plot of the Longest by Probability') +
+  xlab("Numbers of the Longest Run") + ylab("Cumulative Probability") + 
+  theme(
+    plot.title = element_text(size=14, face="bold"),
+    axis.title.x = element_text(size=12),
+    axis.title.y = element_text(size=12)
+  )+ geom_hline(yintercept=c(0.025,0.975) , color='pink', size=2)
+
+ggarrange(p2_1,p2_2, ncol = 2)
+```
+
+
+下表為最長串的次數：
+
+```{r echo=F}
+c1<-c(0,0,0,0,1,0,1,0,1,1,1,0,0,1,0,1,0,0,0,0,1,0,1,1,1,
+      0,0,0,0,1,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,1,0,1,1,0,
+      1,0,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,0,0,0,1,0,0,1,0, 
+      0,1,1,0,0,0,0,1,0,0,0,0,0,1,0,0,1,1,0,1,0,0,1,1,0,
+      1,1,1,0,0,0,0,0,0,0,1,0,1,0,1,1,0,1,1,0,0,1,0,1,0, 
+      0,1,1,0,1,1,0,0,0,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1, 
+      1,0,0,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,1,1,0,0,0,0, 
+      0,0,1,1,1,1,0,1,0,0,0,0,0,0,1,1,0,0,1,0,1,1,0,1,0)
+c2<-c(1,1,1,1,0,0,1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,1,1,1,1,
+      0,0,1,0,1,0,0,0,1,0,0,1,1,0,1,0,1,1,1,0,0,1,1,1,0, 
+      0,1,1,1,1,0,1,1,0,1,0,1,1,1,1,0,1,1,0,1,0,0,1,0,0, 
+      0,1,1,1,0,0,1,1,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0,0,1, 
+      1,0,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,1, 
+      0,1,0,1,1,0,1,1,0,0,0,0,1,1,1,0,1,0,1,1,0,0,1,1,0, 
+      0,1,1,1,0,0,1,1,1,1,0,1,1,0,0,0,1,1,1,0,0,1,1,0,1, 
+      0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,1,0,1,0,1,0,0,1,1,1)
+X<-rbinom(200,1,0.5)
+max1<-0
+max2<-0
+max3 <- 0
+for (i in 1:length(c1)){
+  temp<-0
+  for (j in i:length(c1)){
+    if (c1[j]==c1[i]){temp=temp+1}
+    else{break}
+    max1=max(max1,temp)
+  }
+}
+for (i2 in 1:length(c2)){
+  temp2<-0
+  for (j2 in i2:length(c2)){
+    if (c2[j2]==c2[i2]){temp2=temp2+1}
+    else{break}
+    max2=max(max2,temp2)
+  }
+}
+for (i3 in 1:length(X)){
+  temp3<-0
+  for (j3 in i3:length(X)){
+    if (X[j3]==X[i3]){temp3=temp3+1}
+    else{break}
+    max3=max(max3,temp3)
+  }
+}
+table <- data.frame(Type=c('理論分佈','A','B'),
+                    Test_Statistics=c(max3,max1,max2))
+
+kbl(table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+下表为理论上最长0或1串的累积分布，可以看出在$\alpha=0.05时$，接受域为$\mathcal{A}=(5,12)$，因此A和B都是真实的随机变数，但若在$\alpha=0.1$时，接受域为$\mathcal{A}=(6,10)$，则B拒绝$H_0$，A为真实的随机数，B为伪的随机数。
+
+```{r echo=F}
+options("scipen"=100, "digits"=4)
+
+data2_2 <- matrix(0, nrow = 201, ncol = 200)
+for (x in 1:201){
+  data2_2[x,1] = 0
+  for (n in 1:200){
+    if (n <= (x-1))
+      data2_2[x,n] <- (2^n)
+    else
+      data2_2[x,n]<-sum(data2_2[(x),(n-x):(n-1)])
+  }
+}
+t2 <- data2_2[,200]/(2^200)
+
+df2_2 <- data.frame('Max Length'=c(1:30),'Prob'=t2[1:30])
+kbl(df2_2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+#### 3  0-1变化次数，比如01001的切换次数为4， 0-1-00-1
+
+令$H_o:分布服从B(200,0.5) v.s. H_a:分布不服从B(200,0.5)$，使用**游程檢驗**的方法，構造检验统计量 $\frac{R-\frac{2n_1}{1+c}}{\sqrt{\frac{4cn_1}{(1+c)^2}}} \sim N(0,1)$，R是切換次數，$n_1$是0的個數，$n_2$是1的個數。
+根據下表求得的結果，可以看出，在$\alpha=0.05時$，A與B均不落入於拒絕域，因此A和B都是真實的隨機數，但還是能看出B已快落入拒絕域，因此若改變$\alpha$，例如令$\alpha=0.17$，則此時B落入拒絕域，A是真的随机分布，B是伪的随机分布。
+
+```{r echo=F}
+X<-rbinom(200,1,0.5)
+
+c1<-c(0,0,0,0,1,0,1,0,1,1,1,0,0,1,0,1,0,0,0,0,1,0,1,1,1,
+      0,0,0,0,1,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,1,0,1,1,0,
+      1,0,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,0,0,0,1,0,0,1,0, 
+      0,1,1,0,0,0,0,1,0,0,0,0,0,1,0,0,1,1,0,1,0,0,1,1,0,
+      1,1,1,0,0,0,0,0,0,0,1,0,1,0,1,1,0,1,1,0,0,1,0,1,0, 
+      0,1,1,0,1,1,0,0,0,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1, 
+      1,0,0,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,1,1,0,0,0,0, 
+      0,0,1,1,1,1,0,1,0,0,0,0,0,0,1,1,0,0,1,0,1,1,0,1,0)
+c2<-c(1,1,1,1,0,0,1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,1,1,1,1,
+      0,0,1,0,1,0,0,0,1,0,0,1,1,0,1,0,1,1,1,0,0,1,1,1,0, 
+      0,1,1,1,1,0,1,1,0,1,0,1,1,1,1,0,1,1,0,1,0,0,1,0,0, 
+      0,1,1,1,0,0,1,1,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0,0,1, 
+      1,0,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,1, 
+      0,1,0,1,1,0,1,1,0,0,0,0,1,1,1,0,1,0,1,1,0,0,1,1,0, 
+      0,1,1,1,0,0,1,1,1,1,0,1,1,0,0,0,1,1,1,0,0,1,1,0,1, 
+      0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,1,0,1,0,1,0,0,1,1,1)
+
+method31<-function(x){
+  n<-0
+  for (i in 2:length(x)){
+    if (x[i] != x[i-1]){n=n+1}
+  }
+  n1<-sum(x)
+  n2<-length(x)-n1
+  p<-0
+  c<-rep(0,2)
+  c[1]<-2*n1*n2*(1-1.96/(length(x))^(1/2))/length(x)
+  c[2]<-2*n1*n2*(1+1.96/(length(x))^(1/2))/length(x)+1
+  return(list(n,c))
+}
+
+method32<-function(x){
+  n<-0
+  for (i in 2:length(x)){
+    if (x[i] != x[i-1]){n=n+1}
+  }
+  n1<-sum(x)
+  n2<-length(x)-n1
+  p<-0
+  c<-rep(0,2)
+  c[1]<-2*n1*n2*(1-1.35/(length(x))^(1/2))/length(x)
+  c[2]<-2*n1*n2*(1+1.35/(length(x))^(1/2))/length(x)+1
+  return(list(n,c))
+}
+
+table <- data.frame(Type=c('理論分佈','A','B'),
+                    'Alpha=0.05的檢定統計量'=c('98','96','110'),
+                    'Alpha=0.05的接受域'=c('(85.0984,113.4816)','(85.71862,114.30138)','(85.44297,113.93703)'),
+                    'Alpha=0.17的檢定統計量'=c('98','96','110'),
+                    'Alpha=0.17的接受域'=c('(90.22792,110.27208)','(90.01083,110.00917)','(89.72138,109.65862)'))
+kbl(t(table)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+-------------
+
+#### Question 3 争取提出更多的检验办法进行判断，并给出分析。并且可以将自己的方法用来对计算机模拟生成的0-1串，真正的抛掷结果，以及自己尽力伪造的0-1随机串进行判断和对比。
+
+使用**序列检验**的方法，对于$0<i\leq n$, $（x_{2i-1},x_{2i}）=(0,0),(0,1),(1,0),(1,1)$的概率应均为$\frac{1}{4}$，使用卡方拟合优度检验进行检验。构造检验统计量 $Y=\sum_{i=1}^{4}\frac{((n_i-25)^2)}{25} \sim \mathcal{X}^2(3)$， $H_o:分布服从B(200,0.5) v.s. H_a:分布不服从B(200,0.5)$，在$\alpha=0.05$时，拒绝域为$\mathcal{C}={Y\geq7.8147}$，因此A是真的随机分布，B是伪的随机分布。
+```{r echo=F}
+X<-rbinom(200,1,0.5)
+
+A<-c(0,0,0,0,1,0,1,0,1,1,1,0,0,1,0,1,0,0,0,0,1,0,1,1,1,
+      0,0,0,0,1,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,1,0,1,1,0,
+      1,0,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,0,0,0,1,0,0,1,0, 
+      0,1,1,0,0,0,0,1,0,0,0,0,0,1,0,0,1,1,0,1,0,0,1,1,0,
+      1,1,1,0,0,0,0,0,0,0,1,0,1,0,1,1,0,1,1,0,0,1,0,1,0, 
+      0,1,1,0,1,1,0,0,0,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1, 
+      1,0,0,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,1,1,0,0,0,0, 
+      0,0,1,1,1,1,0,1,0,0,0,0,0,0,1,1,0,0,1,0,1,1,0,1,0)
+B<-c(1,1,1,1,0,0,1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,1,1,1,1,
+      0,0,1,0,1,0,0,0,1,0,0,1,1,0,1,0,1,1,1,0,0,1,1,1,0, 
+      0,1,1,1,1,0,1,1,0,1,0,1,1,1,1,0,1,1,0,1,0,0,1,0,0, 
+      0,1,1,1,0,0,1,1,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0,0,1, 
+      1,0,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,1, 
+      0,1,0,1,1,0,1,1,0,0,0,0,1,1,1,0,1,0,1,1,0,0,1,1,0, 
+      0,1,1,1,0,0,1,1,1,1,0,1,1,0,0,0,1,1,1,0,0,1,1,0,1, 
+      0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,1,0,1,0,1,0,0,1,1,1)
+
+
+q3<-function(X){n<-rep(0,4)
+for(i in 1:100){
+  if(X[2*i-1]==0&&X[2*i]==0){
+    n[1]=n[1]+1
+  }
+  else if(X[2*i-1]==0&&X[2*i]==1){
+    n[2]=n[2]+1
+  }
+  else if(X[2*i-1]==1&&X[2*i]==0){
+    n[3]=n[3]+1
+  }
+  else if(X[2*i-1]==1&&X[2*i]==1){
+    n[4]=n[4]+1
+  }
+}
+x2<-sum((n-25)^2)/25
+return(x2)}
+
+table <- data.frame(Type=c('理論分佈','A','B'),
+                    Test_Statistics=c(q3(X),q3(A),q3(B)))
+
+kbl(table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+
+我们使用Matlab来实现线性同余生成器(LCG)，以此生成随机数。
+
+```{r echo=T}
+#m=2^31-1;a=65539;
+#x=23;n=200;
+#for k=1:n
+#     x(k+1)=mod(x(k)*a,m);
+#     y(k)=x(k+1)/m;
+#end;
+#z=round(y(1:1:n))
+#0,0,0,0,0,1,0,1,1,0,1,1,0,0,1,1,0,0,1,1,1,0,0,0,1,0,1,1,1,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0,1,0,0,0,1,1,1,0,1,1,1,0 ,0,1,1,0,0,0,1,0,1,1,0,0,0,1,1,1,1,1,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0,0,0,1,1,0,1,0,1,0,1,0,0,1,0,0,1,0,0,0, 0 ,0, 0 ,0 ,0 ,0 ,0 ,0, 0, 1, 1,0,0,0,1,1,0,1,0,0,0,0,1,0,1,0,0,1,0,0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,0,1,1,1,0,1,0,1,0,0,0,1,0,1,1,0,1,0,0,1,1,0,1,0,1,0,0,0,0
+```
+
+由下面三种检验方法，可以得知生成的随机数检验结果为真实随机数，虽然LCG在超平面上存在缺点，但在生成的随机数量少的条件下，LCG的表现还是不错的。
+
+```{r echo=F}
+pr <- c(0,0,0,0,0,1,0,1,1,0,1,1,0,0,1,1,0,0,1,1,1,0,0,0,1,0,1,1,1,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0,1,0,0,0,1,1,1,0,1,1,1,0 ,0,1,1,0,0,0,1,0,1,1,0,0,0,1,1,1,1,1,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,0,0,0,1,1,0,1,0,1,0,1,0,0,1,0,0,1,0,0,0, 0 ,0, 0 ,0 ,0 ,0 ,0 ,0, 0, 1, 1,0,0,0,1,1,0,1,0,0,0,0,1,0,1,0,0,1,0,0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,0,1,1,1,0,1,0,1,0,0,0,1,0,1,1,0,1,0,0,1,1,0,1,0,1,0,0,0,0)
+q3<-function(X){n<-rep(0,4)
+for(i in 1:100){
+  if(X[2*i-1]==0&&X[2*i]==0){
+    n[1]=n[1]+1
+  }
+  else if(X[2*i-1]==0&&X[2*i]==1){
+    n[2]=n[2]+1
+  }
+  else if(X[2*i-1]==1&&X[2*i]==0){
+    n[3]=n[3]+1
+  }
+  else if(X[2*i-1]==1&&X[2*i]==1){
+    n[4]=n[4]+1
+  }
+}
+x2<-sum((n-25)^2)/25
+return(x2)}
+
+method31<-function(x){
+  n<-0
+  for (i in 2:length(x)){
+    if (x[i] != x[i-1]){n=n+1}
+  }
+  n1<-sum(x)
+  n2<-length(x)-n1
+  p<-0
+  c<-rep(0,2)
+  c[1]<-2*n1*n2*(1-1.96/(length(x))^(1/2))/length(x)
+  c[2]<-2*n1*n2*(1+1.96/(length(x))^(1/2))/length(x)+1
+  return(list(n,c))
+}
+
+
+max4<-0
+for (i in 1:length(c1)){
+  temp<-0
+  for (j in i:length(c1)){
+    if (c1[j]==c1[i]){temp=temp+1}
+    else{break}
+    max4=max(max4,temp)
+  }
+}
+
+table <- data.frame(方法=c('序列检验法','0-1变化次数','最长0或1串的长度'),
+                    '檢定統計量'=c(q3(pr),'100',max4),
+                    'Alpha=0.05的接受域'=c('<=7.8147','(83.65,111.57)','(5,12)'))
+ 
+kbl(t(table)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
